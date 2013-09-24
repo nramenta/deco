@@ -1,0 +1,8 @@
+{
+  "require": {
+    "docopt/docopt": "@stable",
+    "flow/flow": "@stable",
+    "michelf/php-markdown": "@stable",
+    "symfony/yaml": "@stable"
+  }
+}
