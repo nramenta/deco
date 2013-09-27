@@ -237,9 +237,6 @@ TARGETS = $(patsubst %.md,%.html,$(patsubst files/%,site/%, $(FILES)))
 
 all: $(TARGETS)
 
-targets:
-	@echo $(TARGETS)
-
 clean:
 	rm -rf site/*
 
