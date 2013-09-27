@@ -235,6 +235,8 @@ FILES=$(shell find files -type f -name '*' ! -name '.*')
 
 TARGETS = $(patsubst %.md,%.html,$(patsubst files/%,site/%, $(FILES)))
 
+.PHONY: clean flush
+
 all: $(TARGETS)
 
 clean:
