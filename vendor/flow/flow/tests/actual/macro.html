@@ -1,0 +1,8 @@
+{% macro bold(text="Hello, World!") %}
+<b>{! text !}</b>
+<i>{{ text }}</i>
+{% endmacro %}
+
+{% call bold %}
+{% call bold("Foo") %}
+{% call bold(text="<i>Bar</i>") %}

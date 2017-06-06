@@ -8,6 +8,7 @@ use Symfony\Component\Yaml\Yaml;
 use Michelf\MarkdownExtra;
 use Flow\Loader;
 use Flow\Adapter;
+use Flow\Adapter\FileAdapter;
 
 Loader::autoload();
 
@@ -27,28 +28,152 @@ Options:
 
 DOC;
 
-class StringAdapter implements Adapter
+class MemoryStreamWrapper
 {
-    protected $string;
+    static $memory = [];
 
-    public function __construct($string)
+    private $path;
+    private $pos;
+
+    public function stream_open($path, $mode, $options, &$opened_path)
     {
-        $this->string = $string;
+        $url = parse_url($path);
+
+        $this->path = $url['host'] . ($url['path'] ?? '');
+
+        $this->pos = 0;
+
+        return true;
     }
 
-    public function isReadable($path)
+    public function stream_read($count)
+    {
+        if (!isset(self::$memory[$this->path])) {
+            self::$memory[$this->path] = '';
+        }
+
+        $ret = substr(self::$memory[$this->path], $this->pos, $count);
+
+        $this->pos += strlen($ret);
+
+        return $ret;
+    }
+
+    public function stream_write($data)
+    {
+        if (!isset(self::$memory[$this->path])) {
+            self::$memory[$this->path] = '';
+        }
+
+        $left = substr(self::$memory[$this->path], 0, $this->pos);
+
+        $right = substr(self::$memory[$this->path], $this->pos, strlen($data));
+
+        self::$memory[$this->path] = $left . $data . $right;
+
+        $len = strlen($data);
+
+        $this->pos += $len;
+
+        return $len;
+    }
+
+    public function stream_tell()
+    {
+        return $this->pos;
+    }
+
+    public function stream_eof()
+    {
+        return $this->pos >= strlen(self::$memory[$this->path]);
+    }
+
+    public function stream_seek($offset, $whence)
+    {
+        switch ($whence) {
+        case SEEK_SET:
+            if ($offset < strlen(self::$memory[$this->path]) && $offset >= 0) {
+                $this->pos = $offset;
+                return true;
+            } else {
+                return false;
+            }
+            break;
+
+        case SEEK_CUR:
+            if ($offset >= 0) {
+                $this->pos += $offset;
+                return true;
+            } else {
+                return false;
+            }
+
+        case SEEK_END:
+            if (strlen(self::$memory[$this->path]) + $offset >= 0) {
+                $this->pos = strlen(self::$memory[$this->path]) + $offset;
+                return true;
+            } else {
+                return false;
+            }
+
+        default:
+            return false;
+        }
+    }
+
+    public function stream_metadata($path, $option, $var)
+    {
+        if ($option == STREAM_META_TOUCH) {
+            $url = parse_url($path);
+            $name = $url['host'] . $url['path'];
+            if (!isset(self::$memory[$name])) {
+                self::$memory[$name] = '';
+            }
+            return true;
+        }
+        return false;
+    }
+
+    public function stream_stat()
+    {
+        return [];
+    }
+}
+
+stream_wrapper_register('memory', 'MemoryStreamWrapper');
+
+class MemoryAdapter implements Adapter
+{
+    public function __construct(array $storage = [])
+    {
+        foreach ($storage as $path => $source) {
+            file_put_contents('memory://' . $path, $source);
+        }
+    }
+
+    public function isReadable(string $path) : bool
     {
         return true;
     }
 
-    public function lastModified($path)
+    public function lastModified(string $path) : int
     {
         return filemtime(__FILE__);
     }
 
-    public function getContents($path)
+    public function getContents(string $path) : string
     {
-        return $this->string;
+        return file_get_contents('memory://' . $path);
+    }
+
+    public function putContents(string $path, string $contents) : int
+    {
+        return file_put_contents('memory://' . $path , $contents);
+    }
+
+    public function getStreamUrl(string $path) : string
+    {
+        return 'memory://' . $path;
     }
 }
 
@@ -88,13 +213,14 @@ function deco_render($file, $data = [])
     static $flow;
 
     if (!isset($flow)) {
-        $flow = new Loader([
-            'source' => './layouts',
-            'target' => './cache',
-            'helpers' => array(
+        $flow = new Loader(
+            Loader::RECOMPILE_ALWAYS,
+            new FileAdapter(getcwd() . '/layouts'),
+            new FileAdapter(getcwd() . '/cache'),
+            [
                 'encode_email' => 'deco_encode_email',
-            ),
-        ]);
+            ]
+        );
     }
 
     try {
@@ -110,20 +236,21 @@ function deco_parse($source, $data = [])
 {
     static $flow;
 
+    $path = md5($source) . '.html';
+
     if (!isset($flow)) {
-        $flow = new Loader([
-            'source'  => './layouts',
-            'target'  => sys_get_temp_dir(),
-            'helpers' => array(
+        $flow = new Loader(
+            Loader::RECOMPILE_ALWAYS,
+            new MemoryAdapter([$path => $source]),
+            new FileAdapter(sys_get_temp_dir()),
+            [
                 'encode_email' => 'deco_encode_email',
-            ),
-            'adapter' => new StringAdapter($source),
-            'mode'    => Loader::RECOMPILE_ALWAYS,
-        ]);
+            ]
+        );
     }
 
     try {
-        $template = $flow->load('__temporary__' . md5($source));
+        $template = $flow->load($path);
         return $template->render($data + [
         ]);
     } catch (\Exception $e) {
@@ -206,7 +333,7 @@ CSS;
 </head>
 <body>
 <h1>{{ title }}</h1>
-{{ body }}
+{! body !}
 </body>
 </html>
 HTML;
@@ -223,7 +350,7 @@ HTML;
 <body>
 <h1>{{ title }}</h1>
 <p class=byline>By <a href="{{ author.site }}">{{ author.name }}</a> &lt;{{ author.email | encode_email }}&gt;</p>
-{{ body }}
+{! body !}
 </body>
 </html>
 HTML;
@@ -321,7 +448,7 @@ function deco_make($source, $target = null)
         $target = './site/' . basename($source, '.md') . '.html';
     }
     if (is_readable('./data.yml')) {
-        $data = Yaml::parse('./data.yml');
+        $data = Yaml::parse(file_get_contents('./data.yml'));
     } else {
         $data = [];
     }
@@ -342,7 +469,8 @@ function deco_make($source, $target = null)
     } else {
         $title = null;
     }
-    $body = MarkdownExtra::defaultTransform(deco_parse($markdown, ['title' => $title] + $front_matter + $data));
+    $parsed = deco_parse($markdown, ['title' => $title] + $front_matter + $data);
+    $body = MarkdownExtra::defaultTransform($parsed);
     $vars = ['title' => $title, 'body' => $body] + $front_matter + $data;
     if (is_null($vars['title']) && isset($front_matter['title'])) {
         $vars['title'] = $front_matter['title'];
@@ -355,7 +483,7 @@ function deco_make($source, $target = null)
     }
 }
 
-$args = Docopt\docopt($doc, ['version' => 'Deco ' . DECO_VERSION]);
+$args = Docopt::handle($doc, ['version' => 'Deco ' . DECO_VERSION]);
 
 if ($args['init']) {
     return deco_init();

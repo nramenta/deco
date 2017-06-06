@@ -3,13 +3,14 @@
 ## Introduction
 
 Flow began life as a major fork of the original Twig templating engine by Armin
-Ronacher, which he made for [Chyrp], a blogging engine. Flow features template
-inheritance, includes, macros, custom helpers, autoescaping, whitespace control
-and many little features that makes writing templates enjoyable. Flow tries to
-give a consistent and coherent experience in writing clean templates. Flow
-compiles each template into its own PHP class; used with APC, this makes Flow a
-very fast and efficient templating engine. Templates can be read from files,
-loaded from string arrays, or even from databases with relative ease.
+Ronacher, which he made for [Chyrp], a now-defunct blogging engine. Flow
+features template inheritance, includes, macros, custom helpers, whitespace
+control and many little features that make writing templates enjoyable. Flow
+tries to give a consistent and coherent experience in writing clean templates.
+Flow compiles each template into its own PHP class; used in conjunction with
+PHP's OPcache, this makes Flow a very fast and efficient templating engine.
+Templates can be read from files, loaded from string arrays, or even from
+databases with relative ease.
 
 ## Installation
 
@@ -19,12 +20,12 @@ configuration is:
 ```
 {
     "require": {
-        "flow/flow": "@stable"
+        "flow/flow": "0.7.*"
     }
 }
 ```
 
-Flow requires PHP 5.3 or newer. PHP 5.4 is strongly recommended.
+Flow requires PHP 7 or newer.
 
 ## Usage
 
@@ -32,38 +33,37 @@ Using Flow in your code is straight forward:
 
 ```php
 <?php
-require 'path/to/src/Flow/Loader.php';
+require 'path/to/vendor/autoload.php';
+
 use Flow\Loader;
-Loader::autoload();
-$flow = new Loader(array(
-    'source' => 'path/to/templates',
-    'target' => 'path/to/cache',
-));
+use Flow\Adapter\FileAdapter;
+
+$flow = new Loader(
+    Loader::RECOMPILE_NORMAL,
+    new FileAdapter('path/to/templates'),
+    new FileAdapter('path/to/cache')
+);
 
 try {
     $template = $flow->load('home.html');
-    $template->display(array(
+    $template->display([
         'data_1' => 'My first data',
         'data_2' => 'My second data',
-    ));
+    ]);
 } catch (\Exception $e) {
     // something went wrong!
     die($e->getMessage());
 }
 ```
 
-The `Loader` constructor accepts an array of options. They are:
+The `Loader` constructor arguments are as follows:
 
-- `source`: Path to template source files.
-- `target`: Path to compiled PHP files.
 - `mode`: Recompilation mode.
-- `mkdir`: Mode to pass to `mkdir()` when the target directory doesn't exist.
-  Use `false` to suppress automatic target directory creation. Defaults to 0777.
-- `adapter`: Optional `Flow\Adapter` object. See the section on loading
+- `source`: `Flow\Adapter` object. See the section on loading
+  templates from other sources near the bottom of this document.
+- `target`: `Flow\Adapter` object. See the section on loading
   templates from other sources near the bottom of this document.
 - `helpers` : Array of custom helpers.
-
-The `source` and `target` options are required.
 
 The `mode` option can be one of the following:
 
@@ -79,7 +79,7 @@ regardless of what the current mode is.
 In a typical development environment, the `Loader::RECOMPILE_NORMAL` mode should
 be used, while the `Loader::RECOMPILE_NEVER` mode should be used for production
 whenever possible. The `Loader::RECOMPILE_ALWAYS` mode is used only for internal
-debugging purposes by the developers and should generally be avoided.
+debugging and testing purposes by the developers and should generally be avoided.
 
 Two kinds of exceptions are thrown by Flow: `SyntaxError` for syntax errors, and
 `RuntimeException` for everything else.
@@ -87,63 +87,15 @@ Two kinds of exceptions are thrown by Flow: `SyntaxError` for syntax errors, and
 Any reference to template files outside the `source` directory is considered to
 be an error.
 
-## Syntax checking
-
-Syntax checking can be done as following:
-
-```php
-<?php
-require 'path/to/src/Flow/Loader.php';
-use Flow\Loader;
-Loader::autoload();
-$flow = new Loader(array(
-    'source' => 'path/to/templates',
-    'target' => 'path/to/cache',
-));
-
-$file = 'my_template.html';
-
-if (!$flow->isValid($file, $error)) {
-    echo 'The template ' . $file . ' is not valid: ' . $error;
-}
-```
-
-The above example will check the template for errors without actually compiling
-it.
-
-## Compiling programatically
-
-It is possible to compile templates without loading and displaying them:
-
-```php
-<?php
-require 'path/to/src/Flow/Loader.php';
-use Flow\Loader;
-Loader::autoload();
-$flow = new Loader(array(
-    'source' => 'path/to/templates',
-    'target' => 'path/to/cache',
-));
-
-try {
-    $flow->compile('some_template.html');
-} catch (\Exception $e) {
-    // something went wrong!
-    die($e->getMessage());
-}
-```
-
-This is useful if your application needs to bulk-compile several templates or
-allows users to upload, create, or modify templates.
-
 ## Basic concepts
 
-Flow uses `{%` and `%}` to delimit block tags. Block tags are used mainly
-for block declarations in template inheritance and control structures. Examples
-of block tags are `block`, `for`, and `if`. Some block tags may have a body
+Flow uses `{%` and `%}` to delimit block tags. Block tags are used mainly for
+block declarations in template inheritance and control structures. Examples of
+block tags are `block`, `for`, and `if`. Some block tags may have a body
 segment. They're usually enclosed by a corresponding `end<tag>` tag. Flow uses
-`{{` and `}}` to delimit output tags, and `{#` and `#}` to delimit comments.
-Keywords and identifiers are *case-sensitive*.
+`{{` and `}}` to delimit output tags, `{!` and `!}` to delimit raw output tags,
+and `{#` and `#}` to delimit comments. Keywords and identifiers are
+*case-sensitive*.
 
 ## Comments
 
@@ -161,9 +113,16 @@ and the closing `}}` tags:
 
     Hello, {{ username }}
 
-    {{ "Welcome back, " .. username }}
+    {{ "Welcome back, " ~ username }}
 
-    {{ "Two plus two equals " .. 2 + 2 }}
+    {{ "Two plus two equals " ~ 2 + 2 }}
+
+## Raw expression output
+
+To output a raw expression without doing any output escaping, use the opening
+`{!` and the closing `!}` tags:
+
+    The following will be HTML bold: {! "<b>bold text</b>" !}
 
 ## Literals
 
@@ -192,7 +151,13 @@ Strings can either be double quoted or single quoted; both recognize escape
 sequence characters. There are no support for variable extrapolation. Use string
 concatenation instead:
 
-    {{ "This is a string " .. 'This is also a string' }}
+    {{ "This is a string " ~ 'This is also a string' }}
+
+You can also join two or more strings or scalars using the join operator:
+
+    {{ "Welcome," .. user.name }}
+
+The join operator uses a single space character to join strings together.
 
 ### Booleans
 
@@ -257,19 +222,24 @@ The `in` operator works with arrays, iterators and plain objects:
 For iterators and plain objects, the `in` operator first converts them using a
 simple `(array)` type conversion.
 
-Use `..` (a double dot) to concatenate between two or more scalars as strings:
+Use `~` (tilde) to concatenate between two or more scalars as strings:
 
-    {{ "Hello," .. " World!" }}
+    {{ "Hello," ~ " World!" }}
 
 String concatenation has a lower precedence than arithmetic operators:
 
-    {{ "1 + 1 = " .. 1 + 1 .. " and everything is OK again!" }}
+    {{ "1 + 1 = " ~ 1 + 1 ~ " and everything is OK again!" }}
 
 Will yield
 
     1 + 1 = 2 and everything is OK again!
 
-String output and concatenation coerce scalar values into strings.
+Use `..` (a double dot) to join two or more scalars as string using a single
+space character:
+
+    {{ "Welcome," .. user.name }}
+
+String output, concatenations and joins coerce scalar values into strings.
 
 ### Operator precedence
 
@@ -279,7 +249,7 @@ precedence in descending order:
 - Attribute access: `.` and `[]` for objects and arrays
 - Filter chaining: `|`
 - Arithmetic: unary `-` and `+`, `%`, `/`, `*`, `-`, `+`
-- Concatenation: `..`
+- Concatenation: `..`, `~`
 - Comparison: `!==`, `===`, `==`, `!=`, `<>`, `<`, `>`, `>=`, `<=`
 - Conditional: `in`, `not`, `and`, `or`, `xor`
 - Ternary: `? :`
@@ -335,15 +305,15 @@ functions stored in arrays:
 ```php
 <?php
 $template = $flow->load('my_template.html');
-$template->display(array(
-    'user' => array(
+$template->display([
+    'user' => [
         'firstname' => 'Rasmus',
         'lastname'  => 'Lerdorf',
         'fullname'  => function($self) {
             return $self['firstname'] . ' ' .  $self['lastname'];
         },
-    ),
-));
+    ],
+]);
 ```
 
 And call the `fullname` "method" in the template as follows:
@@ -360,11 +330,11 @@ in the array.
 
 It's possible to dynamically access an object or array attributes:
 
-    {% set attr = 'name' %}
+    {% assign attr = 'name' %}
 
     Your name: {{ user[attr] }}
 
-## Helpers 
+## Helpers
 
 Helpers are simple functions you can use to test or modify values prior to use.
 There are two ways you can use them:
@@ -421,25 +391,12 @@ Or use the helper as a function:
 
     {{ number_format(12_000 + 5_000) }}
 
-### Special `raw` helper
-
-The `raw` helper can only be applied as a filter. Its sole purpose is to mark an
-expression as a raw string that will not be escaped even when autoescaping is
-turned on:
-
-    {% autoescape on %}
-    {{ "<p>this is a valid HTML paragraph</p>" | raw }}
-
-Without the `raw` filter being applied, the above will yield
-
-    &lt;p&gt;this is a valid HTML paragraph&lt;/p&gt;
-
 ### Built-in helpers
 
 `abs`, `bytes`, `capitalize`, `cycle`, `date`, `dump`, `e`, `escape`, `first`,
-`format`, `is_divisible_by`, `is_empty`, `is_even`, `is_odd`, `join`,
-`json_encode`, `keys`, `last`, `length`, `lower`, `nl2br`, `number_format`,
-`range`, `raw`, `repeat`, `replace`, `strip_tags`, `title`, `trans`, `trim`,
+`format`, `is_iterable`, `is_divisible_by`, `is_empty`, `is_even`, `is_odd`,
+`join`, `json_encode`, `keys`, `last`, `length`, `lower`, `nl2br`,
+`number_format`, `range`, `repeat`, `replace`, `strip_tags`, `title`, `trim`,
 `truncate`, `unescape`, `upper`, `url_encode`, `word_wrap`.
 
 ### Registering custom helpers
@@ -448,16 +405,20 @@ Registering custom helpers is straightforward:
 
 ```php
 <?php
-$helpers = array(
+use Flow\Loader;
+use Flow\Adapter\FileAdapter;
+
+$helpers = [
     'random' => function() { return 4; },
     'exclamation' => function($s = null) { return $s . '!'; },
-);
+];
 
-$flow = new Loader(array(
-    'source'  => 'templates',
-    'target'  => 'cache',
-    'helpers' => $helpers,
-));
+$flow = new Loader(
+    Loader::RECOMPILE_NORMAL,
+    new FileAdapter('/path/to/templates'),
+    new FileAdapter('/path/to/cache'),
+    $helpers
+);
 
 try {
     $template = $flow->load('my_template.html');
@@ -534,7 +495,7 @@ tags, extends tags, parent tags, set tags, and include tags.
 
 You can use the ternary operator if you need branching inside an expression:
 
-    {{ error ? '<p>' .. error .. '</p>' :  '<p>success!</p>' }}
+    {{ error ? '<p>' ~ error ~ '</p>' :  '<p>success!</p>' }}
 
 The ternary operator has the lowest precedence in an expression.
 
@@ -590,27 +551,27 @@ next iteration, respectively. The following will print "1 2 3":
         {% break if i > 2 %}
     {% endfor %}
 
-## Set
+## Assign
 
 It is sometimes unavoidable to set values to variables and object or array
-attributes; use the `set` construct:
+attributes; use the `assign` construct:
 
-    {% set fullname = user.firstname .. ' ' .. user.lastname %}
+    {% assign fullname = user.firstname .. user.lastname %}
 
-    {% set user.fullname = fullname %}
+    {% assign user.fullname = fullname %}
 
-You can also use `set` as a way to buffer output and store the result in a
+You can also use `assign` as a way to buffer output and store the result in a
 variable:
 
-    {% set slogan %}
+    {% assign slogan %}
     <p>This changes everything!</p>
-    {% endset %}
+    {% endassign %}
     ...
     {{ slogan }}
     ...
 
-The scope of variables introduced by the `set` construct is always local to its
-surrounding context.
+The scope of variables introduced by the `assign` construct is always local to
+its surrounding context.
 
 ## Blocks
 
@@ -631,7 +592,7 @@ Blocks are at the core of template inheritance:
     {% endblock %}
     This will never be displayed!
 
-When child_template.html is loaded, it will yield:
+When `child_template.html` is loaded, it will yield:
 
     <p>Hello</p>
 
@@ -654,8 +615,8 @@ templates:
 
     {% extends "path/to/layout.html" %}
 
-The template extension mechanism is fully dynamic; you can use variables or wrap
-it in conditionals just like any other statement:
+The template extension mechanism is fully dynamic with some caveats. You can use
+context variables or wrap it in conditionals just like any other statement:
 
     {% extends layout if some_condition %}
 
@@ -663,8 +624,60 @@ You can also use the ternary operator:
 
     {% extends some_condition ? custom_layout : "default_layout.html" %}
 
+You cannot however use expressions and variables that are calculated inside the
+template before the `extends` tag. This is because the extends tag is the first
+thing a template will evaluate regardless of where its position is in the
+template. This is also why it's best to put your `extends` tags somewhere at the
+top of your templates. For example, the following will not work:
+
+    {% assign extend_template = true %}
+    {% extends "parent.html" if extend_template %}
+
+The following will also not work because `tpl` is a value calculated inside the
+template before the `extends` tag:
+
+    {% assign tpl = "parent.html" %}
+    {% extends tpl %}
+
+If however the `extend_template` or the `tpl` variables are context variables
+that already exist before the template loads, then the two examples above will
+work as expected.
+
 It is a syntax error to declare more than one `extends` tag per template or to
 declare an `extends` tag anywhere but at the top level scope.
+
+### Parameterized template extension
+
+Using the `assign` tag to override a context variable before extending a parent
+template will not work. This is because an `extends` tag is the first thing a
+template will evaluate regardless of where its position is in the template and
+extending a template will discard the current extending template's layout
+(i.e., everything outside `block` tags) in favor of the extended template's
+layout.
+
+You can however pass an array to override a parent template's context when
+extending it. With a parent template:
+
+    {# this is in parent.html #}
+    {% if show %}
+    TADA!
+    {% endif %}
+
+And a child template:
+
+    {# this is in child.html #}
+    {% extends "parent.html" with ['show' => true] %}
+
+Rendering the child template will produce:
+
+    TADA!
+
+Likewise, you can't use variables created using the `assign` tag inside the
+array parameter used with the `extends` tag. For example, the following will
+not work:
+
+    {% assign foo = "BAR" %}
+    {% extends "parent.html" with [some_string => foo] %}
 
 ## Parent
 
@@ -680,7 +693,7 @@ error.
 
 ## Macro
 
-Macros are a great way to make reusable partial templates:
+Macros are a great way to make flexible and reusable partial templates:
 
     {% macro bolder(text) %}
     <b>{{ text }}</b>
@@ -688,10 +701,7 @@ Macros are a great way to make reusable partial templates:
 
 To call them:
 
-    {{ @bolder("this is great!") }}
-
-Macro calls are prepended with the `@` character. This is done to avoid name
-collisions with helpers, method calls and attribute access. 
+    {% call bolder("this is great!") %}
 
 All parameters are optional; they default to `null` while extra positional
 arguments passed are ignored. Flow lets you define a custom default value for
@@ -703,20 +713,63 @@ each parameter:
 
 You can also use named arguments:
 
-    {{ @bolder(text="this is a text") }}
+    {% call bolder(text="this is a text") %}
 
 Extra named arguments overwrite positional arguments with the same name and
 previous named arguments with the same name. The parentheses are optional only
 if there are no arguments passed. Parameters and variables declared inside
-macros with the `set` construct are local to the macro and will cease to exist
-once the macro returns.
+macros with the `assign` construct are local to the macro and will cease to
+exist once the macro returns.
 
-The output of macros are by default unescaped, regardless of what the current
-`autoescape` setting is. To escape the output, you must explicitly apply the
-`escape` or `e` filter. Inside the macros themselves, autoescape works as usual
-and depends on the current autoescape settings.
+Macros are dynamically scoped. They inherit the calling context:
 
-Declaring macros inside blocks or other macros is a syntax error.
+    {% macro greet %}
+    <p>{{ "Hello," .. name }}</p>
+    {% endmacro %}
+
+    {% assign name = "Joe" %}
+
+    {% call greet %}
+
+The above will print:
+
+    <p>Hello Joe</p>
+
+The calling context is masked by the arguments and the default parameter values.
+
+Macros are inherited by extending templates and at the same time overrides other
+macros with the same name in parent templates.
+
+Defining macros inside blocks or other macros is a syntax error. Redefining
+macros in a template is also a syntax error.
+
+### Macro block and yield
+
+You can call a macro `with` a block and `yield` inside the macro definition:
+
+    {% macro header %}
+    <header>{% yield %}</header>
+    {% endmacro %}
+
+    {% assign title = "Flow macro blocks is cool" %}
+
+    {% call header with %}<h1>{{ title or "This is the title" }}</h1>{% endcall %}
+
+The above will result in:
+
+    <header><h1>Flow macro blocks is cool</h1></header>
+
+It is possible to `yield` multiple times and to also provide context overrides:
+
+    {% macro header %}
+    <header>{% yield(title="Flow") %}</header>
+    {% endmacro %}
+
+    {% call header with %}<h1>{{ title }}</h1>{% endcall %}
+
+Which will result in:
+
+    <header><h1>Flow</h1></header>
 
 ### Importing macros
 
@@ -728,7 +781,11 @@ classes. To use macros defined in another template, simply import them:
 All imported macros must be aliased using the `as` keyword. To call an imported
 macro, simply prepend the macro name with the alias followed by a dot:
 
-    {{ @form.text_input }}
+    {% call form.text_input %}
+
+Imported macros are inherited by extending templates and at the same time
+overrides other imported macros with the same alias and name pair in parent
+templates.
 
 ### Decorating macros
 
@@ -739,18 +796,15 @@ You can decorate macros by importing them first:
 
     {# this is in "macro_B.html" #}
     {% import "macro_A.html" as A %}
-    {% macro emphasize(text) %}<i>{{ @A.emphasize(text) }}</i>{% endmacro %}
+    {% macro emphasize(text) %}<i>{% call A.emphasize(text) %}</i>{% endmacro %}
 
     {# this is in "template_C.html" #}
     {% import "macro_B.html" as B %}
-    Emphasized text: {{ @B.emphasize("this is pretty cool!") }}
+    Emphasized text: {% call B.emphasize("this is pretty cool!") %}
 
 The above when rendered will yield:
 
     Emphasized text: <i><b>this is pretty cool!</b></i>
-
-Decorating macros lets you effectively extend macros without the headache that
-an inheritance mechanism can potentially induce.
 
 ## Include
 
@@ -764,6 +818,16 @@ no mechanisms to prevent circular inclusion of templates, although there is a
 PHP runtime limit on recursion: either the allowed memory allocation size is
 reached, thereby producing a fatal runtime error, or the number of maximum
 nesting level is reached, if you're using xdebug.
+
+### Parameterized template inclusion
+
+As with template extension, you can pass an array as the overriding context for
+the included template:
+
+    {% include "footer.html" with ['year' => current_year] %}
+
+The array parameter will override any variables in the current context but only
+for the duration of the include.
 
 ## Path resolution
 
@@ -802,11 +866,13 @@ Sometimes you need to load templates from a database or even string arrays. This
 is possible in Flow by simply passing an object of a class that implements the
 `Flow\Adapter` interface to the `adapter` option of the `Loader` constructor.
 
-The `Flow\Adapter` interface declares three methods:
+The `Flow\Adapter` interface declares five methods:
 
-- `isReadable($path)`: Determines whether the path is readable or not.
-- `lastModified($path)`: Returns the last modified time of the path.
-- `getContents($path)`: Returns the contents of the given path.
+- `isReadable`: Determines whether the path is readable or not.
+- `lastModified`: Returns the last modified time of the path.
+- `getContents`: Returns the contents of the given path.
+- `putContents`: Puts content in path and returns bytes written.
+- `getStreamUrl`: Returns the stream URL.
 
 The `source` option given in the `Loader` constructor still determines if a
 template is valid; i.e., whether the template can logically be found in the
@@ -816,41 +882,51 @@ Below is an example of implementing a Flow adapter to string arrays:
 
 ```php
 <?php
-require 'path/to/src/Flow/Loader.php';
-
 use Flow\Loader;
 use Flow\Adapter;
+use Flow\Adapter\FileAdapter;
 
 class ArrayAdapter implements Adapter
 {
-    static $templates = array(
+    static $templates = [
         'first.html' => 'First! {% include "second.html" %}',
         'second.html' => 'Second!',
-    );
+    ];
 
-    public function isReadable($path)
+    public function isReadable(string $path) : bool
     {
         return isset(self::$templates[$path]);
     }
 
-    public function lastModified($path)
+    public function lastModified(string $path) : int
     {
         return filemtime(__FILE__);
     }
 
-    public function getContents($path)
+    public function getContents(string $path) : string
     {
         return self::$templates[$path];
+    }
+
+    public function putContents(string $path, string $contents) : int
+    {
+        self::$templates[$path] = $contents;
+        return strlen($contents);
+    }
+
+    public function getStreamUrl(string $path) : string
+    {
+        /* registering array stream wrapper storage is left as an exercise */
+        return 'array://' . $path;
     }
 }
 
 Loader::autoload();
-$flow = new Loader(array(
-    'source'  => __DIR__ . '/templates',
-    'target'  => __DIR__ . '/cache',
-    'mode'    => Loader::RECOMPILE_ALWAYS,
-    'adapter' => new ArrayAdapter,
-));
+$flow = new Loader(
+    Loader::RECOMPILE_ALWAYS,
+    new ArrayAdapter,
+    new FileAdapter('/path/to/cache')
+);
 $flow->load('first.html')->display();
 ```
 
@@ -859,49 +935,6 @@ The above will compile the templates and render the following:
 ```
 First! Second!
 ```
-
-## Output escaping
-
-You can escape data to be printed out by using the `escape` or its alias `e`
-filter. Output escaping assumes HTML output.
-
-### Using autoescape
-
-Use the auto escape facility if you want all expression output to be escaped
-before printing, minimizing potential XSS attacks:
-
-    {% autoescape on %}
-
-Think of autoescape as implicitly putting an `escape` or `e` filter on every
-expression output. You would normally want to put this directive somewhere near
-the top of your template. Autoescape works on a per template basis; it is never
-inherited, included, or imported from other templates.
-
-You do not need to worry if you accidentally double escape a variable. All data
-already escaped will **not** be autoescaped; note that this is only applicable
-when `escape` or its alias `e` is used as a filter and not a function:
-
-    {% autoescape on %}
-    {{ "Dr. Jekyll & Mr. Hyde" | escape }}
-
-You can turn autoescape off at any time by simply setting it to off:
-
-    {% autoescape off %}
-
-You can isolate the effects of autoescape, whether it's on or off, by enclosing
-it with a corresponding `endautoescape` tag:
-
-    {% autoescape on %}
-    This section is specifically autoescaped: {{ "<b>bold</b>" }}
-    {% endautoescape %}
-
-By default, autoescape is initially set to off.
-
-### Raw filter
-
-By using the `raw` filter on a variable output, the data will **not** be escaped
-regardless of any `escape` filters or the current autoescape status. You must
-use it as a filter; the `raw` helper is not available as a function.
 
 ## Controlling whitespace
 
@@ -956,16 +989,6 @@ The semantics are as follows:
 
 - `-%}`, `-}}`, and `-#}` delimiters will remove all whitespace to their right
   **up to and including** the first newline it encounters.
-
-## Raw output
-
-Sometimes you need to output raw blocks of text, as in the case of code. You
-can use the raw tag:
-
-    {% raw %}
-    I'm inside a raw tag
-    {% this will be printed as is. %}
-    {% endraw %}
 
 ## License
 

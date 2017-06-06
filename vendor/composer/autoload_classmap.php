@@ -6,20 +6,21 @@ $vendorDir = dirname(dirname(__FILE__));
 $baseDir = dirname($vendorDir);
 
 return array(
-    'Docopt\\AnyOptions' => $vendorDir . '/docopt/docopt/src/docopt.php',
+    'Docopt' => $vendorDir . '/docopt/docopt/src/docopt.php',
     'Docopt\\Argument' => $vendorDir . '/docopt/docopt/src/docopt.php',
-    'Docopt\\ChildPattern' => $vendorDir . '/docopt/docopt/src/docopt.php',
+    'Docopt\\BranchPattern' => $vendorDir . '/docopt/docopt/src/docopt.php',
     'Docopt\\Command' => $vendorDir . '/docopt/docopt/src/docopt.php',
     'Docopt\\Either' => $vendorDir . '/docopt/docopt/src/docopt.php',
     'Docopt\\ExitException' => $vendorDir . '/docopt/docopt/src/docopt.php',
     'Docopt\\Handler' => $vendorDir . '/docopt/docopt/src/docopt.php',
     'Docopt\\LanguageError' => $vendorDir . '/docopt/docopt/src/docopt.php',
+    'Docopt\\LeafPattern' => $vendorDir . '/docopt/docopt/src/docopt.php',
     'Docopt\\OneOrMore' => $vendorDir . '/docopt/docopt/src/docopt.php',
     'Docopt\\Option' => $vendorDir . '/docopt/docopt/src/docopt.php',
     'Docopt\\Optional' => $vendorDir . '/docopt/docopt/src/docopt.php',
-    'Docopt\\ParentPattern' => $vendorDir . '/docopt/docopt/src/docopt.php',
+    'Docopt\\OptionsShortcut' => $vendorDir . '/docopt/docopt/src/docopt.php',
     'Docopt\\Pattern' => $vendorDir . '/docopt/docopt/src/docopt.php',
     'Docopt\\Required' => $vendorDir . '/docopt/docopt/src/docopt.php',
     'Docopt\\Response' => $vendorDir . '/docopt/docopt/src/docopt.php',
-    'Docopt\\TokenStream' => $vendorDir . '/docopt/docopt/src/docopt.php',
+    'Docopt\\Tokens' => $vendorDir . '/docopt/docopt/src/docopt.php',
 );

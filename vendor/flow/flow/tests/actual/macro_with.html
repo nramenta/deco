@@ -1,0 +1,16 @@
+{% macro foobar(name="none") %}
+Macro: {{ name }}
+{% assign foo = "BAR" %}
+{% yield(i=i+1) %}
+{% assign i = 42 %}
+{% yield %}
+{{ false }}
+{% endmacro %}
+
+{% assign foo = "bar" %}
+
+{% for i in [1,2,3] %}
+{% call foobar(age=10) with %}
+{{ "inside block" .. age .. foo .. "=" .. i if true }}
+{% endcall %}
+{% endfor %}
