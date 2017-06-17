@@ -281,10 +281,11 @@ YAML;
 body {
   color: #000;
   background-color: #fff;
-  font: 14px/1.5 Verdana, Arial, sans-serif;
-  padding: 1em 0 1em 2em;
-  margin: 0;
-  width: 600px;
+  font: 1em/1.5 Arial, sans-serif;
+  padding: 1em;
+  margin: 0 auto;
+  width: 100%;
+  max-width: 800px;
   text-align: justify;
 }
 
@@ -328,6 +329,7 @@ CSS;
 <html>
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{ title }}</title>
 <link rel=stylesheet type="text/css" href="/style.css">
 </head>
@@ -344,6 +346,7 @@ HTML;
 <html>
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{ title }}</title>
 <link rel=stylesheet type="text/css" href="/style.css">
 </head>
