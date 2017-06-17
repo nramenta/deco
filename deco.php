@@ -305,7 +305,8 @@ a img { border: none; }
 pre {
   margin: 1em 0;
   padding: 1em;
-  background-color: #eee;
+  background-color: floralwhite;
+  border: 1px solid lightgrey;
   white-space: pre-wrap;
   word-wrap: break-word;
 }
